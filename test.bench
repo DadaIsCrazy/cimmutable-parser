@@ -1,0 +1,23 @@
+# Test benchmark.
+
+[struct] # vector / map
+vector
+
+[implem] # AVL / RRB / FINGER
+AVL
+RRB
+
+[type] # int / string
+int
+
+[init]
+create()
+update(v,0,1)
+update(v,15,5)
+c = update(v,9,3)
+pop(c)
+
+[bench]
+update(v,0,1)
+update(v,15,5)
+update(v,9,3)
