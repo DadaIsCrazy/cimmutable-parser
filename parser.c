@@ -210,6 +210,11 @@ void debug_print_cmds (data_type type, command** cmds, int size) {
     case LOOKUP: fprintf(stderr, "lookup(%s, %d)\n", cmd->obj_in, cmd->index); break;
     case SIZE: fprintf(stderr, "size(%s)\n", cmd->obj_in); break;
     case DUMP: fprintf(stderr, "dump(%s)\n", cmd->obj_in); break;
+    case SPLIT:
+      fprintf(stderr, "split(%s, %d, %s, %s)\n",
+	      cmd->obj_in, cmd->index, cmd->obj_out, cmd->obj_out_2);
+      break;
+			
     }
   }
 }
