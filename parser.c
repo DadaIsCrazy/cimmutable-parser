@@ -31,7 +31,7 @@ int get_section_size (FILE* fp, const char* section) {
   
   while (getline(&line, &len, fp) != -1) {
     int i = 0;
-    while (line[i] == ' ') i++;
+    while (line[i] == ' ' || line[i] == '\t') i++;
     if (line[i] == '#' || line[i] == '\n') continue;
     if (line[i] == '[') {
       if (flag) break;
@@ -219,11 +219,3 @@ void debug_print_cmds (data_type type, command** cmds, int size) {
   }
 }
 
-
-int main () {
-
-  Prog* prog = read_file("test.bench");
-  debug_print(prog);
-  
-  return 0;
-}
