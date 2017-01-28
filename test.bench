@@ -11,13 +11,13 @@ RRB
 int
 
 [init]
-create()
-update(v,0,1)
-update(v,15,5)
-c = update(v,9,3)
-pop(c)
+0 = create()
+update(0,0,1)
+update(0,15,5)
+1 = update(0,9,3)
+pop(1)
 
 [bench]
-update(v,0,1)
-update(v,15,5)
-update(v,9,3)
+update(0,0,1)
+update(0,15,5)
+update(0,9,3)

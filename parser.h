@@ -33,19 +33,19 @@ typedef enum {
   - obj_out = update(obj_in, index, data)
   - obj_out = push(obj_in, data)
   - obj_out = pop(obj_in)
-  - obj_out = merge(obj_in, obj_in_2)
+  - obj_out = merge(obj_in, obj_aux)
   - unref(obj_in)
   - lookup(obj_in, index)
   - size(obj_in)
   - dump(obj_in)
-  - split(obj_in, index, obj_out, obj_out_2) */
+  - split(obj_in, index, obj_out, obj_aux) */
 struct _command {
   char is_assign;
+  char is_mutable;
   cmd_type type;
-  char* obj_in;
-  char* obj_in_2; /* needed for merge */
-  char* obj_out;
-  char* obj_out_2; /* needed for split */
+  int obj_in;
+  int obj_out;
+  int obj_aux;
   int index; 
   union { /* type should be deduced from prog->data_type */
     int as_int;
@@ -54,6 +54,7 @@ struct _command {
 };
 
 struct _prog {
+  int nb_var;
   struct_type struc;
   int implem;
   data_type data_type;

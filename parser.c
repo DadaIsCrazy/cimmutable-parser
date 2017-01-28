@@ -50,8 +50,24 @@ int get_section_size (FILE* fp, const char* section) {
 
 Prog* read_file(char* name) {
 
+  /* Conversion of the variables names. */
+  FILE* fp;
+  char output[20];
+  int nb_var;
+  char* cmd = malloc((151+strlen(name))*sizeof(char));
+  sprintf(cmd, "perl -pi -e 's{ (\\w+) (\\s*=) }{ ($c{$1}//=$i++).$2 }gex; s{ ([a-z]\\w*) (\\s*[,)]) }{ ($c{$1}//=$i++).$2 }gex; END { print 0+(sort values %%c)[-1] }' %s", name);
+  fp = popen(cmd, "r");
   
-  FILE* fp = fopen(name, "r");
+  if (fp == NULL) die("Couldn't convert the names.");
+  if (fgets(output, sizeof(output)-1, fp) != NULL) {
+    nb_var = atoi(output)+1;
+  } else {
+    die("Convertion didn't return anything");
+  }
+  pclose(fp);
+
+  
+  fp = fopen(name, "r");
   if (fp == NULL) die("Unable to open file %s", name);
 
   char* line = NULL;
@@ -65,6 +81,7 @@ Prog* read_file(char* name) {
   char* delim = " ,=()";
   
   Prog* prog = malloc(sizeof *prog);
+  prog->nb_var = nb_var;
   prog->struc = 0;
   prog->data_type = prog->key_type = 0;
   prog->implem = 0;
@@ -107,12 +124,12 @@ Prog* read_file(char* name) {
       }
       cmd->is_assign = 0;
       cmd->index = 0;
-      cmd->obj_in = cmd->obj_in_2 = cmd->obj_out =
-	cmd->obj_out_2 = cmd->data.as_string = NULL;
+      cmd->obj_in = cmd->obj_out = cmd->obj_aux = -1;
+      cmd->data.as_string = NULL;
       char* fun_name;
       if (strpbrk(c,"=") != NULL ) {
 	cmd->is_assign = 1;
-	cmd->obj_out = strdup(strtok(c, delim));
+	cmd->obj_out = atoi(strtok(c, delim));
 	fun_name = strtok(NULL, delim);
       } else {
 	fun_name = strtok(c, delim);
@@ -122,7 +139,7 @@ Prog* read_file(char* name) {
 	cmd->type = CREATE;
       } else if (strcmp(fun_name, "update") == 0) {
 	cmd->type = UPDATE;
-	cmd->obj_in = strdup(strtok(NULL, delim));
+	cmd->obj_in = atoi(strtok(NULL, delim));
 	cmd->index = atoi(strtok(NULL, delim));
 	if (prog->data_type == INT)
 	  cmd->data.as_int = atoi(strtok(NULL, delim));
@@ -130,10 +147,10 @@ Prog* read_file(char* name) {
 	  cmd->data.as_string = strdup(strtok(NULL, delim));
       } else if (strcmp(fun_name, "merge") == 0) {
 	cmd->type = MERGE;
-	cmd->obj_in   = strdup(strtok(NULL, delim));
-	cmd->obj_in_2 = strdup(strtok(NULL, delim));
+	cmd->obj_in   = atoi(strtok(NULL, delim));
+	cmd->obj_aux = atoi(strtok(NULL, delim));
       } else if (strcmp(fun_name, "push") == 0) { 
-	cmd->obj_in = strdup(strtok(NULL, delim));
+	cmd->obj_in = atoi(strtok(NULL, delim));
 	cmd->type = PUSH;
 	if (prog->data_type == INT)
 	  cmd->data.as_int = atoi(strtok(NULL, delim));
@@ -141,29 +158,30 @@ Prog* read_file(char* name) {
 	  cmd->data.as_string = strdup(strtok(NULL, delim));
       } else if (strcmp(fun_name, "pop") == 0) {
 	cmd->type = POP;
-	cmd->obj_in = strdup(strtok(NULL, delim));
+	cmd->obj_in = atoi(strtok(NULL, delim));
       } else if (strcmp(fun_name, "unref") == 0) {
 	cmd->type = UNREF;
-	cmd->obj_in = strdup(strtok(NULL, delim));
+	cmd->obj_in = atoi(strtok(NULL, delim));
       } else if (strcmp(fun_name, "lookup") == 0) {
 	cmd->type = LOOKUP;
-	cmd->obj_in = strdup(strtok(NULL, delim));
+	cmd->obj_in = atoi(strtok(NULL, delim));
 	cmd->index = atoi(strtok(NULL, delim));
       } else if (strcmp(fun_name, "size") == 0) {
 	cmd->type = SIZE;
-	cmd->obj_in = strdup(strtok(NULL, delim));
+	cmd->obj_in = atoi(strtok(NULL, delim));
       } else if (strcmp(fun_name, "dump") == 0) {
 	cmd->type = DUMP;
-	cmd->obj_in = strdup(strtok(NULL, delim));
+	cmd->obj_in = atoi(strtok(NULL, delim));
       } else if (strcmp(fun_name, "split") == 0) {
 	cmd->type = SPLIT;
-	cmd->obj_in = strdup(strtok(NULL, delim));
+	cmd->obj_in = atoi(strtok(NULL, delim));
 	cmd->index  = atoi(strtok(NULL, delim));
-	cmd->obj_out   = strdup(strtok(NULL, delim));
-	cmd->obj_out_2 = strdup(strtok(NULL, delim));
+	cmd->obj_out   = atoi(strtok(NULL, delim));
+	cmd->obj_aux = atoi(strtok(NULL, delim));
       } else {
 	die("Unknown operation: %s\n", line);
       }
+      cmd->is_mutable = cmd->obj_in == cmd->obj_out;
       break;
     }
   }
@@ -175,6 +193,7 @@ Prog* read_file(char* name) {
 
 void debug_print_cmds (data_type type, command** cmds, int size);
 void debug_print (Prog* prog) {
+  fprintf(stderr, "nb var... %d\n", prog->nb_var);
   fprintf(stderr, "struct... %s\n", prog->struc == VECTOR ? "vector" : "map");
   fprintf(stderr, "implem... ");
   if (prog->implem & AVL) fprintf(stderr, "AVL ");
@@ -191,28 +210,28 @@ void debug_print_cmds (data_type type, command** cmds, int size) {
   for (int i = 0; i < size; i++) {
     fprintf(stderr, "\t");
     command* cmd = cmds[i];
-    if (cmd->is_assign) fprintf(stderr, "%s = ", cmd->obj_out);
+    if (cmd->is_assign) fprintf(stderr, "%d = ", cmd->obj_out);
     switch (cmd->type) {
     case CREATE: fprintf(stderr, "create()\n"); break;
-    case UNREF:  fprintf(stderr, "unref(%s)\n", cmd->obj_in); break;
+    case UNREF:  fprintf(stderr, "unref(%d)\n", cmd->obj_in); break;
     case UPDATE:
-      fprintf(stderr, "update(%s, %d, ", cmd->obj_in, cmd->index);
+      fprintf(stderr, "update(%d, %d, ", cmd->obj_in, cmd->index);
       if (type == INT) fprintf(stderr, "%d)\n",cmd->data.as_int);
       else fprintf(stderr, "%s)\n", cmd->data.as_string);
       break;
     case PUSH:
-      fprintf(stderr, "push(%s, ", cmd->obj_in);
+      fprintf(stderr, "push(%d, ", cmd->obj_in);
       if (type == INT) fprintf(stderr, "%d)\n",cmd->data.as_int);
       else fprintf(stderr, "%s)\n", cmd->data.as_string);
       break;
-    case POP: fprintf(stderr, "pop(%s)\n", cmd->obj_in); break;
-    case MERGE: fprintf(stderr, "merge(%s, %s)\n", cmd->obj_in, cmd->obj_in_2); break;
-    case LOOKUP: fprintf(stderr, "lookup(%s, %d)\n", cmd->obj_in, cmd->index); break;
-    case SIZE: fprintf(stderr, "size(%s)\n", cmd->obj_in); break;
-    case DUMP: fprintf(stderr, "dump(%s)\n", cmd->obj_in); break;
+    case POP: fprintf(stderr, "pop(%d)\n", cmd->obj_in); break;
+    case MERGE: fprintf(stderr, "merge(%d, %d)\n", cmd->obj_in, cmd->obj_aux); break;
+    case LOOKUP: fprintf(stderr, "lookup(%d, %d)\n", cmd->obj_in, cmd->index); break;
+    case SIZE: fprintf(stderr, "size(%d)\n", cmd->obj_in); break;
+    case DUMP: fprintf(stderr, "dump(%d)\n", cmd->obj_in); break;
     case SPLIT:
-      fprintf(stderr, "split(%s, %d, %s, %s)\n",
-	      cmd->obj_in, cmd->index, cmd->obj_out, cmd->obj_out_2);
+      fprintf(stderr, "split(%d, %d, %d, %d)\n",
+	      cmd->obj_in, cmd->index, cmd->obj_out, cmd->obj_aux);
       break;
 			
     }
