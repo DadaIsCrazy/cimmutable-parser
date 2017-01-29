@@ -21,6 +21,13 @@ void die(char* str, ...) {
   exit(EXIT_FAILURE);
 }
 
+// memory leaks function.
+#define remove_quotes(str)			\
+  if (str[0] == '"') {				\
+    str++;					\
+    str[strlen(str)-1] = '\0';			\
+  }
+
 int get_section_size (FILE* fp, const char* section) {
 
   int position = ftell(fp);  
@@ -33,6 +40,7 @@ int get_section_size (FILE* fp, const char* section) {
     int i = 0;
     while (line[i] == ' ' || line[i] == '\t') i++;
     if (line[i] == '#' || line[i] == '\n') continue;
+    if (strcmp(&line[i],"__END__\n") == 0) break;  
     if (line[i] == '[') {
       if (flag) break;
       flag = strstr(line, section) != NULL;
@@ -98,6 +106,7 @@ Prog* read_file(char* name) {
     while (*c == ' ' || *c == '\t') c++; // skipping spaces.
     if (*c == '\n' || *c == '\0') continue; // skipping empty lines.
     if (*c == '#') continue; // skipping comments.
+    if (strcmp(c,"__END__\n") == 0) break; // skipping end block.
 
     if (*c == '[') {
       section = *(c+1) + *(c+2);
@@ -140,11 +149,22 @@ Prog* read_file(char* name) {
       } else if (strcmp(fun_name, "update") == 0) {
 	cmd->type = UPDATE;
 	cmd->obj_in = atoi(strtok(NULL, delim));
-	cmd->index = atoi(strtok(NULL, delim));
+	if (prog->struc == VECTOR) {
+	  cmd->index = atoi(strtok(NULL, delim));
+	} else {
+	  if (prog->key_type == INT)
+	    cmd->key.as_int = atoi(strtok(NULL, delim));
+	  else {
+	    cmd->key.as_string = strdup(strtok(NULL, delim));
+	    remove_quotes(cmd->key.as_string);
+	  }
+	}
 	if (prog->data_type == INT)
 	  cmd->data.as_int = atoi(strtok(NULL, delim));
-	else
+	else {
 	  cmd->data.as_string = strdup(strtok(NULL, delim));
+	  remove_quotes(cmd->data.as_string);
+	}
       } else if (strcmp(fun_name, "merge") == 0) {
 	cmd->type = MERGE;
 	cmd->obj_in   = atoi(strtok(NULL, delim));
@@ -154,11 +174,22 @@ Prog* read_file(char* name) {
 	cmd->type = PUSH;
 	if (prog->data_type == INT)
 	  cmd->data.as_int = atoi(strtok(NULL, delim));
-	else
+	else {
 	  cmd->data.as_string = strdup(strtok(NULL, delim));
+	  remove_quotes(cmd->data.as_string);
+	}
       } else if (strcmp(fun_name, "pop") == 0) {
 	cmd->type = POP;
 	cmd->obj_in = atoi(strtok(NULL, delim));
+      } else if (strcmp(fun_name, "remove") == 0) {
+	cmd->type = REMOVE;
+	cmd->obj_in = atoi(strtok(NULL, delim));
+	if (prog->key_type == INT)
+	  cmd->key.as_int = atoi(strtok(NULL, delim));
+	else {
+	  cmd->key.as_string = strdup(strtok(NULL, delim));
+	  remove_quotes(cmd->key.as_string);
+	}
       } else if (strcmp(fun_name, "unref") == 0) {
 	cmd->type = UNREF;
 	cmd->obj_in = atoi(strtok(NULL, delim));
@@ -191,7 +222,7 @@ Prog* read_file(char* name) {
   return prog;
 }
 
-void debug_print_cmds (data_type type, command** cmds, int size);
+void debug_print_cmds (Prog* prog, command** cmds, int size);
 void debug_print (Prog* prog) {
   fprintf(stderr, "nb var... %d\n", prog->nb_var);
   fprintf(stderr, "struct... %s\n", prog->struc == VECTOR ? "vector" : "map");
@@ -202,11 +233,11 @@ void debug_print (Prog* prog) {
   fprintf(stderr, "\n");
   fprintf(stderr, "type..... %s\n", prog->data_type == INT ? "int" : "string");
   fprintf(stderr, "init :\n");
-  debug_print_cmds(prog->data_type, prog->init, prog->init_size);
+  debug_print_cmds(prog, prog->init, prog->init_size);
   fprintf(stderr, "bench :\n");
-  debug_print_cmds(prog->data_type, prog->bench, prog->bench_size);
+  debug_print_cmds(prog, prog->bench, prog->bench_size);
 }
-void debug_print_cmds (data_type type, command** cmds, int size) {
+void debug_print_cmds (Prog* prog, command** cmds, int size) {
   for (int i = 0; i < size; i++) {
     fprintf(stderr, "\t");
     command* cmd = cmds[i];
@@ -215,16 +246,23 @@ void debug_print_cmds (data_type type, command** cmds, int size) {
     case CREATE: fprintf(stderr, "create()\n"); break;
     case UNREF:  fprintf(stderr, "unref(%d)\n", cmd->obj_in); break;
     case UPDATE:
-      fprintf(stderr, "update(%d, %d, ", cmd->obj_in, cmd->index);
-      if (type == INT) fprintf(stderr, "%d)\n",cmd->data.as_int);
+      fprintf(stderr, "update(%d, ", cmd->obj_in);
+      if (prog->struc == VECTOR) fprintf(stderr, "%d, ", cmd->index);
+      else
+	if (prog->key_type == INT) fprintf(stderr, "%d, ", cmd->key.as_int);
+	else fprintf(stderr, "%s, ", cmd->key.as_string);
+      if (prog->data_type == INT) fprintf(stderr, "%d)\n",cmd->data.as_int);
       else fprintf(stderr, "%s)\n", cmd->data.as_string);
       break;
     case PUSH:
       fprintf(stderr, "push(%d, ", cmd->obj_in);
-      if (type == INT) fprintf(stderr, "%d)\n",cmd->data.as_int);
+      if (prog->data_type == INT) fprintf(stderr, "%d)\n",cmd->data.as_int);
       else fprintf(stderr, "%s)\n", cmd->data.as_string);
       break;
     case POP: fprintf(stderr, "pop(%d)\n", cmd->obj_in); break;
+    case REMOVE:
+      if (prog->key_type == INT) fprintf(stderr, "remove(%d)\n", cmd->key.as_int);
+      else fprintf(stderr, "remove(%s)\n", cmd->key.as_string);
     case MERGE: fprintf(stderr, "merge(%d, %d)\n", cmd->obj_in, cmd->obj_aux); break;
     case LOOKUP: fprintf(stderr, "lookup(%d, %d)\n", cmd->obj_in, cmd->index); break;
     case SIZE: fprintf(stderr, "size(%d)\n", cmd->obj_in); break;

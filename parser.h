@@ -24,7 +24,7 @@ typedef enum {
 } data_type;
 
 typedef enum {
-  CREATE, UNREF, UPDATE, PUSH, POP, LOOKUP, MERGE, SPLIT, SIZE, DUMP
+  CREATE, UNREF, UPDATE, PUSH, POP, REMOVE, LOOKUP, MERGE, SPLIT, SIZE, DUMP
 } cmd_type;
 
 /* note: some fields can be empty */
@@ -33,6 +33,7 @@ typedef enum {
   - obj_out = update(obj_in, index, data)
   - obj_out = push(obj_in, data)
   - obj_out = pop(obj_in)
+  - obj_out = remove(obj_in)
   - obj_out = merge(obj_in, obj_aux)
   - unref(obj_in)
   - lookup(obj_in, index)
@@ -51,6 +52,10 @@ struct _command {
     int as_int;
     char* as_string;
   } data;
+  union {
+    int as_int;
+    char* as_string;
+  } key;
 };
 
 struct _prog {
